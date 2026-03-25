@@ -67,6 +67,7 @@ server.tool(
         asins,
         domain: domain ?? DEFAULT_DOMAIN,
         stats: stats_days ?? 30,
+        rating: true,
       });
       const products = (res.data.products ?? []).map((p) =>
         transformProductSnapshot(p, domain)
@@ -98,6 +99,7 @@ server.tool(
         domain: domain ?? DEFAULT_DOMAIN,
         stats: days ?? 90,
         history: true,
+        rating: true,
       });
       const histories = (res.data.products ?? []).map((p) => {
         const csv = p.csv ?? [];
@@ -269,6 +271,7 @@ server.tool(
           asins: batch,
           domain: domainStr,
           stats: 30,
+          rating: true,
         });
 
         for (const raw of res.data.products ?? []) {
@@ -364,6 +367,7 @@ server.tool(
         asins,
         domain: domainStr,
         stats: 1,
+        rating: true,
       });
 
       const allAlerts: unknown[] = [];

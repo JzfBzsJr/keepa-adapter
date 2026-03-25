@@ -40,6 +40,7 @@ export async function runDailyCollection(
         domain,
         stats: 30,
         history: false,
+        rating: true,
       });
 
       for (const raw of res.data.products ?? []) {

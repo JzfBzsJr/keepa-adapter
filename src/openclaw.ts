@@ -55,6 +55,7 @@ export class KeepaSkill {
         asins,
         domain: opts?.domain,
         stats: opts?.statsDays ?? 30,
+        rating: true,
       });
       const products = (res.data.products ?? []).map((p) =>
         transformProductSnapshot(p, opts?.domain)
@@ -78,6 +79,7 @@ export class KeepaSkill {
         domain: opts?.domain,
         stats: opts?.days ?? 90,
         history: true,
+        rating: true,
       });
       const histories = (res.data.products ?? []).map((p) => {
         const csv = p.csv ?? [];
@@ -208,6 +210,7 @@ export class KeepaSkill {
           asins: batch,
           domain: domainStr,
           stats: 30,
+          rating: true,
         });
 
         for (const raw of res.data.products ?? []) {
@@ -287,6 +290,7 @@ export class KeepaSkill {
         asins,
         domain: domainStr,
         stats: 1,
+        rating: true,
       });
 
       const allAlerts: unknown[] = [];
