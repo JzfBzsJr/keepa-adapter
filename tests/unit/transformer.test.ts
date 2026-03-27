@@ -59,10 +59,35 @@ describe("transformer", () => {
     });
 
     it("handles null csv arrays", () => {
-      const raw = makeRawProduct({ csv: null });
+      const raw = makeRawProduct({ csv: null, stats: undefined });
       const snapshot = transformProductSnapshot(raw);
       expect(snapshot.amazon_price).toBeNull();
       expect(snapshot.sales_rank).toBeNull();
+    });
+
+    it("falls back to stats.current when csv arrays are null", () => {
+      const raw = makeRawProduct({
+        csv: null,
+        stats: {
+          current: [
+            2000, // AMAZON (0) = $20.00
+            3599, // NEW (1) = $35.99
+            null, // USED (2)
+            1220, // SALES_RANK (3)
+            null, null, null, null, null, null, null, null, null, null, null, null,
+            48,   // RATING (16) = 4.8
+            10625, // COUNT_REVIEWS (17)
+            2000, // BUY_BOX_SHIPPING (18) = $20.00
+          ],
+        },
+      });
+      const snapshot = transformProductSnapshot(raw);
+      expect(snapshot.amazon_price).toBe(20.00);
+      expect(snapshot.new_price).toBe(35.99);
+      expect(snapshot.sales_rank).toBe(1220);
+      expect(snapshot.rating).toBe(4.8);
+      expect(snapshot.review_count).toBe(10625);
+      expect(snapshot.buy_box_price).toBe(20.00);
     });
 
     it("detects Amazon as buy box winner", () => {

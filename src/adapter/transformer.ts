@@ -56,11 +56,29 @@ function domainName(domainId: number): string {
 
 // --- Per-type transformers ---
 
+/** Get latest value from CSV array, falling back to stats.current[index] */
+function getValueWithFallback(
+  csv: (number[] | null)[] | null,
+  statsCurrent: (number | null)[] | null | undefined,
+  index: number,
+  opts?: { isPriceCents?: boolean }
+): number | null {
+  // Try CSV time-series first
+  const csvVal = getLatestCsvValue(csv?.[index], opts);
+  if (csvVal != null) return csvVal;
+
+  // Fallback to stats.current
+  const statsVal = statsCurrent?.[index];
+  if (statsVal == null || statsVal === -1) return null;
+  return opts?.isPriceCents ? statsVal / 100 : statsVal;
+}
+
 export function transformProductSnapshot(
   raw: KeepaProduct,
   domain?: string
 ): ProductSnapshot {
   const csv = raw.csv ?? [];
+  const statsCurrent = raw.stats?.current;
   const domainStr = domain ?? domainName(raw.domainId);
 
   // Parse images from imagesCSV (comma-separated filenames)
@@ -136,18 +154,18 @@ export function transformProductSnapshot(
     domain: domainStr,
     title: raw.title ?? null,
     brand: raw.brand ?? null,
-    amazon_price: getLatestCsvValue(csv[CSV_TYPE.AMAZON], { isPriceCents: true }),
-    new_price: getLatestCsvValue(csv[CSV_TYPE.NEW], { isPriceCents: true }),
-    sales_rank: getLatestCsvValue(csv[CSV_TYPE.SALES_RANK]),
+    amazon_price: getValueWithFallback(csv, statsCurrent, CSV_TYPE.AMAZON, { isPriceCents: true }),
+    new_price: getValueWithFallback(csv, statsCurrent, CSV_TYPE.NEW, { isPriceCents: true }),
+    sales_rank: getValueWithFallback(csv, statsCurrent, CSV_TYPE.SALES_RANK),
     subcategory_ranks: subcategoryRanks,
     rating: (() => {
-      const raw_rating = getLatestCsvValue(csv[CSV_TYPE.RATING]);
+      const raw_rating = getValueWithFallback(csv, statsCurrent, CSV_TYPE.RATING);
       return raw_rating != null ? raw_rating / 10 : null;
     })(),
-    review_count: getLatestCsvValue(csv[CSV_TYPE.COUNT_REVIEWS]),
+    review_count: getValueWithFallback(csv, statsCurrent, CSV_TYPE.COUNT_REVIEWS),
     buy_box_seller_id: buyBoxSellerId,
     buy_box_is_amazon: buyBoxSellerId === "ATVPDKIKX0DER" ? true : buyBoxSellerId ? false : null,
-    buy_box_price: getLatestCsvValue(csv[CSV_TYPE.BUY_BOX_SHIPPING], { isPriceCents: true }),
+    buy_box_price: getValueWithFallback(csv, statsCurrent, CSV_TYPE.BUY_BOX_SHIPPING, { isPriceCents: true }),
     images,
     features: raw.features ?? [],
     description: raw.description ?? null,
