@@ -649,34 +649,30 @@ server.tool(
   }
 );
 
-async function main() {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import express from "express";
 
+const app = express();
+const activeTransports: Record<string, SSEServerTransport> = {};
+
+app.get("/mcp", async (req, res) => {
+  const transport = new SSEServerTransport("/mcp", res);
+  activeTransports[transport.sessionId] = transport;
+  res.on("close", () => { delete activeTransports[transport.sessionId]; });
   await server.connect(transport);
-
-  const httpServer = http.createServer((req, res) => {
-    if (req.url === "/mcp") {
-      let body = "";
-      req.on("data", (chunk) => { body += chunk; });
-      req.on("end", () => {
-        const parsed = body ? JSON.parse(body) : undefined;
-        transport.handleRequest(req, res, parsed);
-      });
-    } else {
-      res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end("keepa-adapter is running");
-    }
-  });
-
-  const port = Number(process.env.PORT) || 3000;
-  httpServer.listen(port, () => {
-    console.log(`keepa-adapter listening on port ${port}`);
-  });
-}
-
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
 });
+
+app.post("/mcp", express.json(), async (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  const transport = activeTransports[sessionId];
+  if (transport) {
+    await transport.handlePostMessage(req, res);
+  } else {
+    res.status(400).json({ error: "Session not found" });
+  }
+});
+
+app.get("/", (_req, res) => { res.send("keepa-adapter is running"); });
+
+const port = Number(process.env.PORT) || 3000;
+app.listen(port, () => { console.log(`keepa-adapter listening on port ${port}`); });
