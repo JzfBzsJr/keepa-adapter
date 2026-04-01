@@ -658,8 +658,14 @@ app.get("/mcp", async (req, res) => {
   const transport = new SSEServerTransport("/mcp", res);
   activeTransports[transport.sessionId] = transport;
   res.on("close", () => { delete activeTransports[transport.sessionId]; });
-  await server.close();
-  await server.connect(transport);
+  try {
+    await server.close();
+    await server.connect(transport);
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 app.post("/mcp", express.json(), async (req, res) => {
@@ -672,6 +678,7 @@ app.post("/mcp", express.json(), async (req, res) => {
   }
 });
 
+app.get("/health", (_req, res) => { res.json({ status: "ok" }); });
 app.get("/", (_req, res) => { res.send("keepa-adapter is running"); });
 
 const port = Number(process.env.PORT) || 3000;
