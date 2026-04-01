@@ -654,9 +654,11 @@ const app = express();
 const activeTransports: Record<string, SSEServerTransport> = {};
 
 app.get("/mcp", async (req, res) => {
+  res.setHeader("X-Accel-Buffering", "no");
   const transport = new SSEServerTransport("/mcp", res);
   activeTransports[transport.sessionId] = transport;
   res.on("close", () => { delete activeTransports[transport.sessionId]; });
+  await server.close();
   await server.connect(transport);
 });
 
