@@ -1,6 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import http from "node:http";
 import { z } from "zod";
 
 import { KeepaClient, KeepaApiError } from "./adapter/client.js";
