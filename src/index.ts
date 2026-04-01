@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import http from "node:http";
 import { z } from "zod";
 
 import { KeepaClient, KeepaApiError } from "./adapter/client.js";
@@ -649,8 +650,30 @@ server.tool(
 );
 
 async function main() {
-  const transport = new StdioServerTransport();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+  });
+
   await server.connect(transport);
+
+  const httpServer = http.createServer((req, res) => {
+    if (req.url === "/mcp") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        const parsed = body ? JSON.parse(body) : undefined;
+        transport.handleRequest(req, res, parsed);
+      });
+    } else {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("keepa-adapter is running");
+    }
+  });
+
+  const port = Number(process.env.PORT) || 3000;
+  httpServer.listen(port, () => {
+    console.log(`keepa-adapter listening on port ${port}`);
+  });
 }
 
 main().catch((err) => {
