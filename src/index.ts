@@ -679,7 +679,7 @@ app.post("/mcp", express.json(), async (req, res) => {
 });
 
 app.get("/health", (_req, res) => { res.json({ status: "ok", v: "1873a9e" }); });
-app.get("/", (_req, res) => { res.send("keepa-adapter is running"); });
+app.get("/", (_req, res) => { res.send("keepa-adapter is running v4"); });
 
 const port = Number(process.env.PORT) || 3000;
 app.listen(port, () => { console.log(`keepa-adapter listening on port ${port}`); });
