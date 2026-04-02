@@ -20,7 +20,7 @@
     "collect": "tsx src/scheduler/runner.ts"
   },
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
