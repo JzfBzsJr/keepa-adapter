@@ -647,48 +647,24 @@ server.tool(
   }
 );
 
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 
 const app = express();
-const activeTransports: Record<string, SSEServerTransport> = {};
+app.use(express.json());
 
-app.get("/mcp", async (req, res) => {
-  res.setHeader("X-Accel-Buffering", "no");
-  const transport = new SSEServerTransport("/mcp", res);
-  activeTransports[transport.sessionId] = transport;
-
-  // Keep SSE connection alive through Railway's proxy (drops idle streams after ~60s)
-  const keepalive = setInterval(() => {
-    if (!res.writableEnded) res.write(": ping\n\n");
-  }, 25000);
-
-  res.on("close", () => {
-    clearInterval(keepalive);
-    delete activeTransports[transport.sessionId];
-  });
-
-  try {
-    if (server.isConnected()) await server.close();
-    await server.connect(transport);
-  } catch (err) {
-    clearInterval(keepalive);
-    if (!res.headersSent) res.status(500).json({ error: String(err) });
-  }
+// Stateless StreamableHTTP: each POST request gets a fresh transport.
+// The transport auto-closes after the response, resetting server._transport,
+// so the next request can connect. Suitable for single-client use (Claude Desktop).
+app.post("/mcp", async (req, res) => {
+  if (server.isConnected()) await server.close();
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, req.body);
 });
 
-app.post("/mcp", express.json(), async (req, res) => {
-  const sessionId = req.query.sessionId as string;
-  const transport = activeTransports[sessionId];
-  if (transport) {
-    await transport.handlePostMessage(req, res);
-  } else {
-    res.status(400).json({ error: "Session not found" });
-  }
-});
-
-app.get("/health", (_req, res) => { res.json({ status: "ok", v: "1873a9e" }); });
-app.get("/", (_req, res) => { res.send("keepa-adapter is running v4"); });
+app.get("/health", (_req, res) => { res.json({ status: "ok" }); });
+app.get("/", (_req, res) => { res.send("keepa-adapter is running"); });
 
 const port = Number(process.env.PORT) || 3000;
 app.listen(port, () => { console.log(`keepa-adapter listening on port ${port}`); });
