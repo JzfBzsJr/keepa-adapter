@@ -657,14 +657,23 @@ app.get("/mcp", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   const transport = new SSEServerTransport("/mcp", res);
   activeTransports[transport.sessionId] = transport;
-  res.on("close", () => { delete activeTransports[transport.sessionId]; });
+
+  // Keep SSE connection alive through Railway's proxy (drops idle streams after ~60s)
+  const keepalive = setInterval(() => {
+    if (!res.writableEnded) res.write(": ping\n\n");
+  }, 25000);
+
+  res.on("close", () => {
+    clearInterval(keepalive);
+    delete activeTransports[transport.sessionId];
+  });
+
   try {
-    await server.close();
+    if (server.isConnected()) await server.close();
     await server.connect(transport);
   } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).json({ error: String(err) });
-    }
+    clearInterval(keepalive);
+    if (!res.headersSent) res.status(500).json({ error: String(err) });
   }
 });
 
