@@ -25,12 +25,14 @@ import { analyzeBsrTrend } from "./analysis/bsr-trend.js";
 import { checkVariationChanges } from "./analysis/variation-monitor.js";
 import { analyzePromoImpact } from "./analysis/promo-correlation.js";
 
-const client = new KeepaClient();
 const db = initDb();
-const server = new McpServer({
-  name: "keepa-adapter",
-  version: "1.0.0",
-});
+
+function buildServer(apiKey: string): McpServer {
+  const client = new KeepaClient({ apiKey });
+  const server = new McpServer({
+    name: "keepa-adapter",
+    version: "1.0.0",
+  });
 
 function errorResult(err: unknown) {
   const envelope =
@@ -647,24 +649,30 @@ server.tool(
   }
 );
 
+  return server;
+}
+
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express from "express";
+import express, { Request, Response } from "express";
 
 const app = express();
 app.use(express.json());
 
-// Stateless StreamableHTTP: each POST request gets a fresh transport.
-// The transport auto-closes after the response, resetting server._transport,
-// so the next request can connect. Suitable for single-client use (Claude Desktop).
-app.post("/mcp", async (req, res) => {
-  if (server.isConnected()) await server.close();
+// Each request brings its own apiKey → fresh KeepaClient + McpServer per request.
+app.post("/mcp", async (req: Request, res: Response) => {
+  const apiKey = (req.query.apiKey as string) || process.env.KEEPA_API_KEY || "";
+  if (!apiKey) {
+    res.status(400).json({ error: "Missing apiKey. Add ?apiKey=YOUR_KEY to the URL." });
+    return;
+  }
+  const server = buildServer(apiKey);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
 });
 
-app.get("/health", (_req, res) => { res.json({ status: "ok" }); });
-app.get("/", (_req, res) => { res.send("keepa-adapter is running"); });
+app.get("/health", (_req: Request, res: Response) => { res.json({ status: "ok" }); });
+app.get("/", (_req: Request, res: Response) => { res.send("keepa-adapter is running"); });
 
 const port = Number(process.env.PORT) || 3000;
 app.listen(port, () => { console.log(`keepa-adapter listening on port ${port}`); });
