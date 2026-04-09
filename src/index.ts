@@ -653,22 +653,81 @@ server.tool(
 }
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 
 const app = express();
 app.use(express.json());
 
+function isValidToken(token: string): boolean {
+  const row = db.prepare("SELECT active FROM community_tokens WHERE token = ?").get(token) as { active: number } | undefined;
+  return row?.active === 1;
+}
+
 // Each request brings its own apiKey → fresh KeepaClient + McpServer per request.
 app.post("/mcp", async (req: Request, res: Response) => {
   const apiKey = (req.query.apiKey as string) || process.env.KEEPA_API_KEY || "";
+  const token = req.query.token as string | undefined;
+
   if (!apiKey) {
     res.status(400).json({ error: "Missing apiKey. Add ?apiKey=YOUR_KEY to the URL." });
     return;
   }
+  if (!token || !isValidToken(token)) {
+    res.status(403).json({ error: "Invalid or expired community token." });
+    return;
+  }
+
   const server = buildServer(apiKey);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
+});
+
+// =====================
+// Admin endpoints
+// =====================
+
+function requireAdminKey(req: Request, res: Response, next: NextFunction): void {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) {
+    res.status(500).json({ error: "ADMIN_KEY not configured on server." });
+    return;
+  }
+  if (req.headers["x-admin-key"] !== adminKey) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  next();
+}
+
+// Create token
+app.post("/admin/tokens", requireAdminKey, (req: Request, res: Response) => {
+  const { name } = req.body as { name?: string };
+  if (!name) {
+    res.status(400).json({ error: "name is required" });
+    return;
+  }
+  const token = "tok_" + crypto.randomBytes(16).toString("hex");
+  db.prepare("INSERT INTO community_tokens (token, name) VALUES (?, ?)").run(token, name);
+  res.json({ token, name });
+});
+
+// List all tokens
+app.get("/admin/tokens", requireAdminKey, (_req: Request, res: Response) => {
+  const rows = db.prepare("SELECT token, name, created_at, active FROM community_tokens ORDER BY created_at DESC").all();
+  res.json(rows);
+});
+
+// Revoke token
+app.delete("/admin/tokens/:token", requireAdminKey, (req: Request, res: Response) => {
+  const { token } = req.params;
+  const result = db.prepare("UPDATE community_tokens SET active = 0 WHERE token = ?").run(token);
+  if (result.changes === 0) {
+    res.status(404).json({ error: "Token not found." });
+    return;
+  }
+  res.json({ success: true });
 });
 
 app.get("/health", (_req: Request, res: Response) => { res.json({ status: "ok" }); });

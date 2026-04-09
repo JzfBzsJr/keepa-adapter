@@ -74,6 +74,13 @@ export function initDb(dbPath?: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_promos_asin
       ON promos (asin, domain);
 
+    CREATE TABLE IF NOT EXISTS community_tokens (
+      token TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+      active INTEGER NOT NULL DEFAULT 1
+    );
+
     CREATE TABLE IF NOT EXISTS approved_variation_values (
       asin TEXT NOT NULL,
       domain TEXT NOT NULL DEFAULT 'com',
