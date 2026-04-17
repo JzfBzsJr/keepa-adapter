@@ -659,9 +659,14 @@ import crypto from "crypto";
 const app = express();
 app.use(express.json());
 
-function isValidToken(token: string): boolean {
-  const row = db.prepare("SELECT active FROM community_tokens WHERE token = ?").get(token) as { active: number } | undefined;
-  return row?.active === 1;
+function isValidToken(token: string, apiKey: string): boolean {
+  const row = db.prepare("SELECT active, api_key_hash FROM community_tokens WHERE token = ?").get(token) as { active: number; api_key_hash: string | null } | undefined;
+  if (!row || row.active !== 1) return false;
+  // If token has no bound apiKey — allow (backwards compat for existing tokens)
+  if (!row.api_key_hash) return true;
+  // If token is bound — check apiKey matches
+  const hash = crypto.createHash("sha256").update(apiKey).digest("hex");
+  return hash === row.api_key_hash;
 }
 
 // Each request brings its own apiKey → fresh KeepaClient + McpServer per request.
@@ -673,7 +678,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
     res.status(400).json({ error: "Missing apiKey. Add ?apiKey=YOUR_KEY to the URL." });
     return;
   }
-  if (!token || !isValidToken(token)) {
+  if (!token || !isValidToken(token, apiKey)) {
     res.status(403).json({ error: "Invalid or expired community token." });
     return;
   }
@@ -703,14 +708,15 @@ function requireAdminKey(req: Request, res: Response, next: NextFunction): void 
 
 // Create token
 app.post("/admin/tokens", requireAdminKey, (req: Request, res: Response) => {
-  const { name } = req.body as { name?: string };
+  const { name, apiKey } = req.body as { name?: string; apiKey?: string };
   if (!name) {
     res.status(400).json({ error: "name is required" });
     return;
   }
   const token = "tok_" + crypto.randomBytes(16).toString("hex");
-  db.prepare("INSERT INTO community_tokens (token, name) VALUES (?, ?)").run(token, name);
-  res.json({ token, name });
+  const apiKeyHash = apiKey ? crypto.createHash("sha256").update(apiKey).digest("hex") : null;
+  db.prepare("INSERT INTO community_tokens (token, name, api_key_hash) VALUES (?, ?, ?)").run(token, name, apiKeyHash);
+  res.json({ token, name, apiKeyBound: !!apiKey });
 });
 
 // List all tokens

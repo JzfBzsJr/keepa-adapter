@@ -90,6 +90,13 @@ export function initDb(dbPath?: string): Database.Database {
     );
   `);
 
+  // Migration: add api_key_hash to community_tokens if missing
+  const tokenColumns = db.prepare("PRAGMA table_info(community_tokens)").all() as { name: string }[];
+  const tokenColumnNames = new Set(tokenColumns.map((c) => c.name));
+  if (!tokenColumnNames.has("api_key_hash")) {
+    db.exec("ALTER TABLE community_tokens ADD COLUMN api_key_hash TEXT");
+  }
+
   // Migrations for existing databases
   const columns = db.prepare("PRAGMA table_info(snapshots)").all() as { name: string }[];
   const columnNames = new Set(columns.map((c) => c.name));
